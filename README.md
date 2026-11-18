@@ -79,15 +79,23 @@ start Strata (or run `llm strata models` to see why nothing was found).
 ## Alternative: no plugin needed
 
 llm (0.36+) ships a built-in command for any OpenAI-compatible endpoint, so
-you can talk to Strata without this plugin at all:
+you can talk to Strata without this plugin at all. Get the server URL and the
+API key from the Strata UI (the access/share settings show both; the monitor
+prints the address on every start, and `strata connect --show-key` prints the
+key) — use that gateway URL and `sk-strata-...` key, **not** the raw engine
+address or the hex key Strata keeps in
+`~/.strata/data/native-instances/`, which belong to different listeners with
+different credentials. The gateway port changes with each launch, so always
+copy the live values.
 
 ```bash
-# list the models Strata is serving
-llm openai endpoint http://127.0.0.1:18500/v1 --key KEY --models
+# list the models Strata is serving (URL/key as shown in the Strata UI;
+# through the gateway only the short model aliases are listed)
+llm openai endpoint http://127.0.0.1:47831/v1 --key sk-strata-… --models
 
 # one-off prompt, interactive chat, tools...
-llm openai endpoint http://127.0.0.1:18500/v1 --key KEY \
-  -m qwen3.8-flash-next-iq3_s --chat
+llm openai endpoint http://127.0.0.1:47831/v1 --key sk-strata-… \
+  -m iq3_s --chat
 ```
 
 `--key` also accepts a stored key alias (e.g. `llm keys set strata --value KEY`,
