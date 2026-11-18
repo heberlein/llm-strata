@@ -26,11 +26,15 @@ llm install -e .
 ## Usage
 
 The plugin discovers the running Strata server and its API key automatically,
-so once Strata is serving a model you can just run:
+so once Strata is serving a model you can just run it. The exact model IDs
+depend on which models your Strata serves, so list them first:
 
 ```bash
-llm -m strata/qwen3.8-flash-next "hello"
-llm -m strata/qwen3.8-flash-next -o temperature 0.3 -o max_tokens 200 "hello"
+llm strata models
+# strata/qwen3.8-flash-next-iq3_s  (aliases: strata/iq3_s)
+
+llm -m strata/qwen3.8-flash-next-iq3_s "hello"
+llm -m strata/qwen3.8-flash-next-iq3_s -o temperature 0.3 -o max_tokens 200 "hello"
 ```
 
 Streaming, system prompts, token usage and tool calling
@@ -96,7 +100,7 @@ computer makes Strata generate an `sk-strata-…` key that you must pass.
 
 These CLI commands report servers started with `strata launch`; when the
 desktop app is the one serving, read the URL and key from its UI instead.
-Use them in the example below — the port changes with every launch.
+Use them in the example below.
 
 ```bash
 # list the models Strata is serving (URL/key as shown in the Strata UI;
