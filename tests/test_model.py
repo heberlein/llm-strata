@@ -24,6 +24,11 @@ def make_model(result):
     return model, completions
 
 
+def test_str_shows_model_id_and_base():
+    model, _ = make_model([])
+    assert str(model) == "Strata Chat: strata/test (http://127.0.0.1:1/v1)"
+
+
 def events_by_type(events):
     out = {}
     for event in events:

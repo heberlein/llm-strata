@@ -35,6 +35,19 @@ def test_registers_primary_models_with_alias_entries(monkeypatch):
     assert collector.registered[0][0].model_name == "qwen-max"
 
 
+def test_register_commands_adds_strata_commands():
+    import click
+
+    @click.group()
+    def llm_cli():
+        pass
+
+    llm_strata.register_commands(llm_cli)
+    assert "strata" in llm_cli.commands
+    for name in ("models", "status", "setup", "forget"):
+        assert name in llm_cli.commands["strata"].commands
+
+
 def test_no_discovery_registers_nothing(monkeypatch):
     monkeypatch.setattr(llm_strata, "discover", lambda: [])
     collector = Collector()

@@ -107,3 +107,118 @@ def test_setup_discover_and_forget(tmp_path, monkeypatch):
 
     result = run(["strata", "forget"], monkeypatch)
     assert result.exit_code == 0
+
+
+def test_models_json_output(monkeypatch):
+    result = run(["strata", "models", "--json"], monkeypatch, endpoints=[ep_one()])
+    assert result.exit_code == 0
+    import json
+
+    (entry,) = json.loads(result.output)
+    assert entry["base_url"] == "http://x/v1"
+    assert entry["source"] == "test"
+    assert entry["api_key"] is True
+    by_id = {m["id"]: m for m in entry["models"]}
+    assert set(by_id) == {"big-model", "big"}
+    assert by_id["big-model"]["model_id"] == "strata/big-model"
+    assert by_id["big-model"]["label"] == "Big Model"
+    assert by_id["big"]["alias_of"] == "big-model"
+
+
+def test_models_endpoint_without_rows(monkeypatch):
+    empty = Endpoint(base_url="http://x/v1", api_key="k", source="test", models=())
+    result = run(["strata", "models"], monkeypatch, endpoints=[empty])
+    assert result.exit_code == 0
+    assert "(no models loaded)" in result.output
+
+
+def test_mask_short_and_long_keys():
+    from llm_strata.cli import _mask
+
+    assert _mask(None) == "(no key)"
+    assert _mask("123456789012") == "123..."
+    assert _mask("12345678901234") == "1234567890...1234"
+
+
+def test_setup_without_discoverable_endpoint(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli_mod, "config_path", lambda: tmp_path / "strata.json")
+    monkeypatch.setattr(cli_mod, "load_config", lambda: {})
+    result = run(
+        ["strata", "setup"],
+        monkeypatch,
+        endpoints=[],
+        base_candidates=lambda: [("http://up/v1", "test")],
+        probe=lambda url, key: (True, None),
+    )
+    assert result.exit_code == 1
+    assert "no API key was accepted" in result.output
+
+
+def test_setup_url_unreachable(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli_mod, "config_path", lambda: tmp_path / "strata.json")
+    monkeypatch.setattr(cli_mod, "load_config", lambda: {})
+    result = run(
+        ["strata", "setup", "--url", "http://dead/v1"],
+        monkeypatch,
+        probe=lambda url, key: (False, None),
+    )
+    assert result.exit_code == 1
+    assert "No Strata server answered at http://dead/v1." in result.output
+
+
+def test_setup_rejects_url_when_no_key_accepted(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli_mod, "config_path", lambda: tmp_path / "strata.json")
+    monkeypatch.setattr(cli_mod, "load_config", lambda: {})
+    # duplicate candidates exercise the dedup; none of them works
+    monkeypatch.setattr(cli_mod, "key_candidates", lambda: [("a", "x"), ("a", "x")])
+    monkeypatch.setattr(cli_mod, "probe", lambda url, key: (True, None))
+    result = run(["strata", "setup", "--url", "http://x/v1"], monkeypatch)
+    assert result.exit_code == 1
+    assert "but no key was accepted" in result.output
+    assert not (tmp_path / "strata.json").exists()
+
+
+def test_status_output_health_line(monkeypatch):
+    monkeypatch.setattr(cli_mod, "discover", lambda: [ep_one()])
+    monkeypatch.setattr(
+        cli_mod,
+        "health",
+        lambda endpoint: {
+            "model": "m1",
+            "loaded": True,
+            "api_key": True,
+            "max_context": 131072,
+        },
+    )
+    result = run(["strata", "status"], monkeypatch)
+    assert result.exit_code == 0
+    assert "health: model=m1 loaded=True api_key=True max_context=131072" in result.output
+    assert "big-model" in result.output
+
+
+def test_status_unreachable_health(monkeypatch):
+    monkeypatch.setattr(cli_mod, "discover", lambda: [ep_one()])
+    monkeypatch.setattr(cli_mod, "health", lambda endpoint: None)
+    result = run(["strata", "status"], monkeypatch)
+    assert result.exit_code == 0
+    assert "health: unreachable" in result.output
+
+
+def test_status_no_server(monkeypatch):
+    monkeypatch.setattr(cli_mod, "discover", lambda: [])
+    result = run(
+        ["strata", "status"],
+        monkeypatch,
+        base_candidates=lambda: [("http://down/v1", "test")],
+        probe=lambda url, key: (False, None),
+    )
+    assert result.exit_code == 1
+    assert "Could not reach any Strata server" in result.output
+
+
+def test_forget_removes_pinned_config(monkeypatch):
+    monkeypatch.setattr(cli_mod, "config_path", lambda: "C:/none/strata.json")
+    monkeypatch.setattr(cli_mod, "clear_config", lambda: True)
+    result = run(["strata", "forget"], monkeypatch)
+    assert result.exit_code == 0
+    assert "auto-discovery restored" in result.output
