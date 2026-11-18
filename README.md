@@ -68,6 +68,30 @@ llm strata forget             # remove the pin, fall back to auto-discovery
 plugin with a `setup` command; if `llm -m strata/...` says *Unknown model*,
 start Strata (or run `llm strata models` to see why nothing was found).
 
+## Alternative: no plugin needed
+
+llm (0.36+) ships a built-in command for any OpenAI-compatible endpoint, so
+you can talk to Strata without this plugin at all:
+
+```bash
+# list the models Strata is serving
+llm openai endpoint http://127.0.0.1:18500/v1 --key KEY --models
+
+# one-off prompt, interactive chat, tools...
+llm openai endpoint http://127.0.0.1:18500/v1 --key KEY \
+  -m qwen3.8-flash-next-iq3_s --chat
+```
+
+`--key` also accepts a stored key alias (e.g. `llm keys set strata --value KEY`,
+then `--key strata`).
+
+The difference is what you give up: `llm openai endpoint` does **not log to the
+llm database** and you must pass the URL, key and model ID every time. This
+plugin registers the models permanently, so `llm -m strata/...` just works,
+prompts are logged and replayable (`llm logs`), conversations persist, and the
+URL/key are discovered from the Strata runtime automatically — including its
+rotating keys, which is the part you'd otherwise do by hand.
+
 ## Development
 
 ```bash
