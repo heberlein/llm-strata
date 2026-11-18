@@ -77,7 +77,9 @@ def test_status_json_masks_key(monkeypatch):
     monkeypatch.setattr(cli_mod, "discover", lambda: [ep_one()])
     monkeypatch.setattr(cli_mod, "load_config", lambda: {})
     monkeypatch.setattr(cli_mod, "config_path", lambda: "/tmp/none")
-    monkeypatch.setattr(cli_mod, "health", lambda endpoint: {"status": "ok", "loaded": True})
+    monkeypatch.setattr(
+        cli_mod, "health", lambda endpoint: {"status": "ok", "loaded": True}
+    )
     result = run(["strata", "status", "--json"], monkeypatch)
     assert result.exit_code == 0
     import json
@@ -95,8 +97,12 @@ def test_setup_discover_and_forget(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_mod, "clear_config", lambda: False)
     monkeypatch.setattr(cli_mod, "discover", lambda: [ep_one()])
     saved = {}
-    monkeypatch.setattr(cli_mod, "save_config", lambda cfg: saved.setdefault("cfg", cfg))
-    monkeypatch.setattr(cli_mod, "key_candidates", lambda: [("secret-key-abcdefgh", "test")])
+    monkeypatch.setattr(
+        cli_mod, "save_config", lambda cfg: saved.setdefault("cfg", cfg)
+    )
+    monkeypatch.setattr(
+        cli_mod, "key_candidates", lambda: [("secret-key-abcdefgh", "test")]
+    )
     monkeypatch.setattr(cli_mod, "probe", lambda url, key: (True, ep_one().models))
 
     result = run(["strata", "setup"], monkeypatch)
@@ -192,7 +198,9 @@ def test_status_output_health_line(monkeypatch):
     )
     result = run(["strata", "status"], monkeypatch)
     assert result.exit_code == 0
-    assert "health: model=m1 loaded=True api_key=True max_context=131072" in result.output
+    assert (
+        "health: model=m1 loaded=True api_key=True max_context=131072" in result.output
+    )
     assert "big-model" in result.output
 
 

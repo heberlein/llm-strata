@@ -11,11 +11,11 @@ from .connection import (
     config_path,
     discover,
     health,
+    key_candidates,
     load_config,
     normalize_base,
     probe,
     save_config,
-    key_candidates,
 )
 
 

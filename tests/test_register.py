@@ -43,9 +43,10 @@ def test_register_commands_adds_strata_commands():
         pass
 
     llm_strata.register_commands(llm_cli)
-    assert "strata" in llm_cli.commands
+    strata_group = llm_cli.commands["strata"]
+    assert isinstance(strata_group, click.Group)
     for name in ("models", "status", "setup", "forget"):
-        assert name in llm_cli.commands["strata"].commands
+        assert name in strata_group.commands
 
 
 def test_no_discovery_registers_nothing(monkeypatch):

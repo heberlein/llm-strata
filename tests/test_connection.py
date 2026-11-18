@@ -3,12 +3,11 @@ import os
 from types import SimpleNamespace
 
 import httpx
-import pytest
-
 import llm
-from llm_strata import connection
-
+import pytest
 from fakes import FakeClient, FakeResponse, models_payload
+
+from llm_strata import connection
 
 # Keep stray environment variables from the developer's shell out of the
 # hermetic discovery tests (STRATA_RUNTIME_DIR and friends change the results).
@@ -25,7 +24,6 @@ _strata_env = (
 def clean_strata_env(monkeypatch):
     for name in _strata_env:
         monkeypatch.delenv(name, raising=False)
-
 
 
 def test_normalize_base():
@@ -229,9 +227,7 @@ def test_runtime_dirs_posix_xdg_and_home_fallback(tmp_path, monkeypatch):
 
 def test_base_candidates_skips_missing_dirs_and_broken_files(tmp_path, monkeypatch):
     monkeypatch.setattr(llm, "user_dir", lambda: tmp_path)
-    monkeypatch.setattr(
-        connection, "runtime_dirs", lambda: [tmp_path / "missing"]
-    )
+    monkeypatch.setattr(connection, "runtime_dirs", lambda: [tmp_path / "missing"])
     assert connection.base_candidates() == [("http://127.0.0.1:8080/v1", "default")]
 
     runtime = tmp_path / "runtime"
@@ -271,12 +267,11 @@ def test_probe_non_json_body_and_entries_without_id(tmp_path, monkeypatch):
     assert connection.probe("http://x/v1", "k") == (True, None)
 
     FakeClient.responses = [
-        FakeResponse(
-            200, models_payload([{"label": "no id"}, {"id": "ok-model"}])
-        )
+        FakeResponse(200, models_payload([{"label": "no id"}, {"id": "ok-model"}]))
     ]
     reachable, models = connection.probe("http://x/v1", "k")
     assert reachable is True
+    assert models is not None
     assert [m.id for m in models] == ["ok-model"]
 
 

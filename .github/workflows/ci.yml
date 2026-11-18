@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: lint (ruff + ty)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run ty check src tests
+
   test:
     name: pytest (py${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -23,7 +36,7 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: uv python pin ${{ matrix.python-version }}
       - run: uv sync --frozen
-      - run: uv run pytest tests -q
+      - run: uv run pytest tests -q --cov=llm_strata --cov-report=term-missing --cov-fail-under=100
 
   build:
     name: build sdist + wheel

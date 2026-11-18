@@ -39,9 +39,7 @@ def register_models(register):
                 continue
             registered_ids.add(model_id)
             aliases = [
-                _model_id_for(other)
-                for other in entries
-                if other.alias_of == entry.id
+                _model_id_for(other) for other in entries if other.alias_of == entry.id
             ]
             register(
                 StrataChat(

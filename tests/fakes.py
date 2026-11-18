@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import ClassVar
 
 import httpx
 
@@ -18,16 +19,18 @@ class FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise httpx.HTTPStatusError("error", request=None, response=None)
+            request = httpx.Request("GET", "http://fake")
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError("error", request=request, response=response)
 
 
 class FakeClient:
     """Stand-in for httpx.Client: returns canned responses, records requests."""
 
-    instances: list["FakeClient"] = []
+    instances: ClassVar[list[FakeClient]] = []
+    responses: ClassVar[list[FakeResponse]] = []
 
     def __init__(self, **kwargs):
-        self.responses = getattr(FakeClient, "responses", [])
         self.requests: list[httpx.Request] = []
         FakeClient.instances.append(self)
 
@@ -39,7 +42,7 @@ class FakeClient:
 
     def get(self, url, headers=None):
         self.requests.append(httpx.Request("GET", url, headers=headers or {}))
-        return self.responses.pop(0)
+        return FakeClient.responses.pop(0)
 
 
 def chunk(
@@ -109,8 +112,7 @@ class FakeCompletions:
 
 def fake_client(result):
     completions = FakeCompletions(result)
-    return SimpleNamespace(
-        chat=SimpleNamespace(completions=completions)), completions
+    return SimpleNamespace(chat=SimpleNamespace(completions=completions)), completions
 
 
 def models_payload(models: list[dict]) -> dict:

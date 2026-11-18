@@ -1,13 +1,13 @@
 from types import SimpleNamespace
 
-import httpx
+import httpx2
+import llm
 import openai
 import pytest
-
-import llm
-from llm_strata.model import StrataChat, StrataOptions
-
 from fakes import FakeCompletions, chunk, tool_delta
+from pydantic import ValidationError
+
+from llm_strata.model import StrataChat, StrataOptions
 
 
 def make_model(result):
@@ -18,7 +18,7 @@ def make_model(result):
         api_base="http://127.0.0.1:1/v1",
     )
     completions = FakeCompletions(result)
-    model.get_client = lambda key=None: SimpleNamespace(
+    model.get_client = lambda key=None, *, async_=False: SimpleNamespace(
         chat=SimpleNamespace(completions=completions)
     )
     return model, completions
@@ -66,7 +66,8 @@ def test_streaming_text_and_reasoning():
 
     assert response.input_tokens == 10
     assert response.output_tokens == 4
-    assert response.json()["id"] == "chatcmpl-test"
+    payload = response.json()
+    assert payload is not None and payload["id"] == "chatcmpl-test"
 
 
 def test_streaming_tool_calls_accumulate():
@@ -90,6 +91,21 @@ def test_streaming_tool_calls_accumulate():
     assert tool_call.tool_call_id == "call-1"
 
 
+def test_stream_tool_call_fragment_without_function_is_skipped():
+    broken = SimpleNamespace(index=1, id="call-x", type="function", function=None)
+    chunks = [
+        chunk(tool_calls=[tool_delta(index=0, id="call-1", name="get_time")]),
+        chunk(tool_calls=[broken]),
+        chunk(content=None, finish_reason="tool_calls", usage=(5, 7)),
+    ]
+    model, _ = make_model(iter(chunks))
+    prompt = llm.Prompt("hi", model)
+    response = llm.Response(prompt, model, stream=True)
+    events = events_by_type(response.stream_events())
+    assert events["tool_call_name"] == ["get_time"]
+    assert [t.tool_call_id for t in response.tool_calls()] == ["call-1"]
+
+
 def test_non_streaming_text_reasoning_and_tools():
     message = SimpleNamespace(
         role="assistant",
@@ -100,7 +116,9 @@ def test_non_streaming_text_reasoning_and_tools():
                 id="call-9",
                 type="function",
                 function=SimpleNamespace(name="get_time", arguments='{"city": "Rome"}'),
-            )
+            ),
+            # A custom (free-form) tool call must be skipped, not crash.
+            SimpleNamespace(id="call-custom", type="custom", name="freeform"),
         ],
     )
     completion = SimpleNamespace(
@@ -151,11 +169,12 @@ def test_non_streaming_text_reasoning_and_tools():
 
     assert response.input_tokens == 12
     assert response.output_tokens == 8
-    assert response.json()["id"] == "cmpl-1"
+    payload = response.json()
+    assert payload is not None and payload["id"] == "cmpl-1"
 
 
 def test_connection_error_raises_model_error():
-    error = openai.APIConnectionError(request=httpx.Request("POST", "http://x/v1"))
+    error = openai.APIConnectionError(request=httpx2.Request("POST", "http://x/v1"))
     model, _ = make_model(error)
     prompt = llm.Prompt("hi", model)
     response = llm.Response(prompt, model, stream=True)
@@ -187,5 +206,5 @@ def test_options_class_is_limited():
     assert set(StrataOptions.model_fields) == {"temperature", "top_p", "max_tokens"}
     model, _ = make_model(iter([chunk(content="ok", usage=(1, 1))]))
     assert model.Options is StrataOptions
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         model.Options(nonexistent=1)

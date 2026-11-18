@@ -4,36 +4,46 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from typing import Optional
-
-import openai
-from pydantic import Field
+from dataclasses import dataclass
+from typing import Literal, overload
 
 import llm
+import openai
 from llm.default_plugins.openai_models import Chat, combine_chunks, redact_data
 from llm.parts import StreamEvent
 from llm.utils import remove_dict_none_values
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from pydantic import Field
 
 
 class StrataOptions(llm.Options):
-    temperature: Optional[float] = Field(
+    temperature: float | None = Field(
         default=None,
         description=(
             "Sampling temperature. Higher values make output more random. "
             "Strata default: leave unset to use the server's setting."
         ),
     )
-    top_p: Optional[float] = Field(
+    top_p: float | None = Field(
         default=None,
         description="Nucleus sampling probability mass, 0.0 to 1.0.",
     )
-    max_tokens: Optional[int] = Field(
+    max_tokens: int | None = Field(
         default=None,
         description=(
             "Maximum number of tokens to generate (counting thinking tokens). "
             "Strata default: fill the remaining context."
         ),
     )
+
+
+@dataclass
+class _ToolCallAcc:
+    """A tool-call accumulated from the stream fragments at one delta index."""
+
+    id: str | None
+    name: str
+    arguments: str
 
 
 class StrataChat(Chat):
@@ -68,7 +78,31 @@ class StrataChat(Chat):
     def __str__(self) -> str:
         return f"Strata Chat: {self.model_id} ({self.api_base})"
 
-    def _create(self, client, stream: bool, messages: list, kwargs: dict):
+    @overload
+    def _create(
+        self,
+        client: openai.OpenAI,
+        stream: Literal[True],
+        messages: list,
+        kwargs: dict,
+    ) -> openai.Stream[ChatCompletionChunk]: ...
+
+    @overload
+    def _create(
+        self,
+        client: openai.OpenAI,
+        stream: Literal[False],
+        messages: list,
+        kwargs: dict,
+    ) -> ChatCompletion: ...
+
+    def _create(
+        self,
+        client: openai.OpenAI,
+        stream: bool,
+        messages: list,
+        kwargs: dict,
+    ) -> ChatCompletion | openai.Stream[ChatCompletionChunk]:
         try:
             return client.chat.completions.create(
                 model=self.model_name or self.model_id,
@@ -90,7 +124,7 @@ class StrataChat(Chat):
         response: llm.Response,
         conversation: llm.Conversation | None = None,
         key: str | None = None,
-    ) -> Iterator[llm.StreamEvent | str]:
+    ) -> Iterator[StreamEvent | str]:
         messages = self.build_messages(prompt, conversation)
         kwargs = self.build_kwargs(prompt, stream)
         client = self.get_client(key)
@@ -98,8 +132,8 @@ class StrataChat(Chat):
 
         if stream:
             completion = self._create(client, True, messages, kwargs)
-            chunks = []
-            tool_calls: dict[int, object] = {}
+            chunks: list[ChatCompletionChunk] = []
+            tool_calls: dict[int, _ToolCallAcc] = {}
             for chunk in completion:
                 chunks.append(chunk)
                 if chunk.usage:
@@ -110,62 +144,70 @@ class StrataChat(Chat):
                     if reasoning:
                         yield StreamEvent(type="reasoning", chunk=reasoning)
                     for tool_call in delta.tool_calls or []:
-                        if tool_call.function.arguments is None:
-                            tool_call.function.arguments = ""
-                        index = tool_call.index
-                        if index not in tool_calls:
-                            tool_calls[index] = tool_call
+                        function = tool_call.function
+                        if function is None:
+                            continue
+                        args = function.arguments or ""
+                        acc = tool_calls.get(tool_call.index)
+                        if acc is None:
+                            acc = _ToolCallAcc(
+                                id=tool_call.id,
+                                name=function.name or "",
+                                arguments=args,
+                            )
+                            tool_calls[tool_call.index] = acc
                             yield StreamEvent(
                                 type="tool_call_name",
-                                chunk=tool_call.function.name or "",
-                                tool_call_id=tool_call.id,
+                                chunk=acc.name,
+                                tool_call_id=acc.id,
                             )
                         else:
-                            tool_calls[
-                                index
-                            ].function.arguments += tool_call.function.arguments
-                        if tool_call.function.arguments:
+                            acc.arguments += args
+                        if args:
                             yield StreamEvent(
                                 type="tool_call_args",
-                                chunk=tool_call.function.arguments,
-                                tool_call_id=tool_calls[index].id,
+                                chunk=args,
+                                tool_call_id=acc.id,
                             )
                     if delta.content:
                         # Empty-string deltas are noise (the role chunk).
                         yield StreamEvent(type="text", chunk=delta.content)
             response.response_json = remove_dict_none_values(combine_chunks(chunks))
-            for tool_call in tool_calls.values():
+            for acc in tool_calls.values():
                 response.add_tool_call(
                     llm.ToolCall(
-                        tool_call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        arguments=json.loads(tool_call.function.arguments or "{}"),
+                        tool_call_id=acc.id,
+                        name=acc.name,
+                        arguments=json.loads(acc.arguments or "{}"),
                     )
                 )
         else:
             completion = self._create(client, False, messages, kwargs)
-            usage = completion.usage.model_dump()
+            usage = completion.usage.model_dump() if completion.usage else None
             response.response_json = remove_dict_none_values(completion.model_dump())
             message = completion.choices[0].message
             reasoning = getattr(message, "reasoning_content", None)
             if reasoning:
                 yield StreamEvent(type="reasoning", chunk=reasoning)
             for tool_call in message.tool_calls or []:
+                if tool_call.type != "function":
+                    continue
+                function = tool_call.function
                 response.add_tool_call(
                     llm.ToolCall(
                         tool_call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        arguments=json.loads(tool_call.function.arguments or "{}"),
+                        name=function.name,
+                        arguments=json.loads(function.arguments or "{}"),
                     )
                 )
                 yield StreamEvent(
                     type="tool_call_name",
-                    chunk=tool_call.function.name or "",
+                    chunk=function.name or "",
                     tool_call_id=tool_call.id,
                 )
                 yield StreamEvent(
                     type="tool_call_args",
-                    chunk=tool_call.function.arguments or "",
+                    chunk=function.arguments or "",
                     tool_call_id=tool_call.id,
                 )
             if message.content is not None:

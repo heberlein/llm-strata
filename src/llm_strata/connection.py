@@ -202,7 +202,9 @@ def key_candidates() -> list[tuple[str, str]]:
     return unique
 
 
-def probe(base_url: str, api_key: str | None) -> tuple[bool, tuple[ModelInfo, ...] | None]:
+def probe(
+    base_url: str, api_key: str | None
+) -> tuple[bool, tuple[ModelInfo, ...] | None]:
     """Try one (base URL, key) pair.
 
     Returns ``(reachable, models)``:
