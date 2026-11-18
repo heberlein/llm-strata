@@ -1,7 +1,15 @@
 # llm-strata
 
 An [llm](https://github.com/simonw/llm) plugin that exposes the models served
-locally by the **Strata** runtime as regular llm models, named `strata/<model-id>`.
+locally by [Strata](https://github.com/Niko1221/Strata) — a one-click local AI
+runtime for Windows/Linux with an OpenAI-compatible API on localhost — as
+regular llm models, named `strata/<model-id>`.
+
+If you don't know either: **llm** is a CLI for running prompts against any LLM
+with a local logging database; **Strata** runs open models (e.g.
+Qwen3.8-Flash-Next) on your own hardware and serves them at
+`http://127.0.0.1:8080/v1`. This plugin lets `llm` talk to Strata's models
+like any hosted model.
 
 ## Install
 
