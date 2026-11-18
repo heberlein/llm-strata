@@ -79,14 +79,24 @@ start Strata (or run `llm strata models` to see why nothing was found).
 ## Alternative: no plugin needed
 
 llm (0.36+) ships a built-in command for any OpenAI-compatible endpoint, so
-you can talk to Strata without this plugin at all. Get the server URL and the
-API key from the Strata UI (the access/share settings show both; the monitor
-prints the address on every start, and `strata connect --show-key` prints the
-key) — use that gateway URL and `sk-strata-...` key, **not** the raw engine
-address or the hex key Strata keeps in
-`~/.strata/data/native-instances/`, which belong to different listeners with
-different credentials. The gateway port changes with each launch, so always
-copy the live values.
+you can talk to Strata without this plugin at all. You need the server URL and
+its API key. Both are shown in the Strata UI under **Serving**, and from the
+CLI:
+
+```bash
+strata launch --status              # address of the running strata-launch server
+strata launch --show-key            # its API key
+strata connect opencode --show-key  # URL + key the same way an app would be configured
+```
+
+In the launch monitor, press `7` (the *Connect* view) and `k` to reveal the
+key. The default address is `http://127.0.0.1:8080`; a local server without an
+API key (the default) needs no `--key` at all, while sharing beyond this
+computer makes Strata generate an `sk-strata-…` key that you must pass.
+
+These CLI commands report servers started with `strata launch`; when the
+desktop app is the one serving, read the URL and key from its UI instead.
+Use them in the example below — the port changes with every launch.
 
 ```bash
 # list the models Strata is serving (URL/key as shown in the Strata UI;
